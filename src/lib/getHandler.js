@@ -1,3 +1,4 @@
+import proxyStream from "./proxyStream.js";
 import { isValidHostName } from "./isValidHostName.js";
 import { getProxyForUrl } from "proxy-from-env";
 import { readFileSync } from "node:fs";
