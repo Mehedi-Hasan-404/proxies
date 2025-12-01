@@ -8,7 +8,11 @@ import withCORS from "./withCORS.js";
 import parseURL from "./parseURL.js";
 import proxyM3U8 from "./proxyM3U8.js";
 import { proxyTs } from "./proxyTS.js";
-import proxyStream from "./proxyStream.js"; // <--- NEW IMPORT
+import proxyRequest from "./proxyRequest.js"; // Assuming this exists for the general proxy logic
+
+const cors_headers = {
+  "access-control-allow-origin": "*",
+};
 
 export default function getHandler(options, proxy) {
   const corsAnywhere = {
@@ -87,7 +91,7 @@ export default function getHandler(options, proxy) {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
 
-      res.end(readFileSync(join(__dirname, "../index.html")));
+      res.end(readFileSync(join(process.cwd(), "src", "index.html")));
       return;
     }
 
@@ -103,8 +107,8 @@ export default function getHandler(options, proxy) {
       return;
     }
 
+    // --- CUSTOM ROUTING FOR M3U8/TS PROXY ENDPOINTS ---
     if (!/^\/https?:/.test(req.url) && !isValidHostName(location.hostname)) {
-      // NOTE: Assuming web_server_url is provided in the options object or globally accessible
       const web_server_url = options.web_server_url || 'http://localhost:3000'; 
       const uri = new URL(req.url ?? web_server_url, "http://localhost:3000");
 
@@ -120,7 +124,7 @@ export default function getHandler(options, proxy) {
         const url = uri.searchParams.get("url");
         return proxyM3U8(url ?? "", headers, res);
 
-      } else if (uri.pathname === "/ts-proxy") {
+      } else if (uri.pathname === "/ts-proxy") { // <--- THIS HANDLES THE RAW STREAM (routed from index.html)
         let headers = {};
         try {
           headers = JSON.parse(uri.searchParams.get("headers") ?? "{}");
@@ -132,26 +136,16 @@ export default function getHandler(options, proxy) {
         const url = uri.searchParams.get("url");
         return proxyTs(url ?? "", headers, req, res);
       
-      } else if (uri.pathname === "/stream-proxy") { // <--- NEW ROUTE ADDED
-        let headers = {};
-        try {
-          headers = JSON.parse(uri.searchParams.get("headers") ?? "{}");
-        } catch (e) {
-          res.writeHead(500);
-          res.end(e.message);
-          return;
-        }
-        const url = uri.searchParams.get("url");
-        return proxyStream(url ?? "", headers, req, res);
-
       } else if (uri.pathname === "/") {
-        return res.end(readFileSync(join(__dirname, "../index.html")));
+        // Correct path for reading index.html
+        return res.end(readFileSync(join(process.cwd(), "src", "index.html")));
       } else {
         res.writeHead(404, "Invalid host", cors_headers);
         res.end("Invalid host: " + location.hostname);
         return;
       }
     }
+    // --- END CUSTOM ROUTING ---
 
     if (!hasRequiredHeaders(req.headers)) {
       res.writeHead(400, "Header required", cors_headers);
