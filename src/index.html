@@ -98,7 +98,11 @@
   <body>
     <div class="test">
       <label for="url" id="labelurl">URL</label>
-      <input type="text" id="url" />
+      <input 
+        type="text" 
+        id="url" 
+        placeholder="Enter M3U8 (playlist) or Raw Stream (e.g., http://ip:port/)" 
+      />
       <button onclick="play()" class="btn btn-play">PLAY</button>
       <button onclick="clearFields()" class="btn btn-clear">CLEAR</button>
     </div>
@@ -111,34 +115,52 @@
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script type="text/javascript">
       let hls;
-
+      
       function play() {
-        const url = document.getElementById("url").value;
+        const urlInput = document.getElementById("url").value.trim();
         const resultDiv = document.getElementById("result");
+        
+        if (!urlInput) {
+            alert("Please enter a URL.");
+            return;
+        }
 
+        // --- UPDATED LOGIC: Check for M3U8 or use Raw Stream Proxy ---
+        const isM3U8 = urlInput.toLowerCase().includes(".m3u8");
+        const proxyPath = isM3U8 ? "/m3u8-proxy" : "/stream-proxy"; 
+        
+        const proxiedUrl = `${window.location.origin}${proxyPath}?url=${encodeURIComponent(urlInput)}`;
+        // ---------------------------------------------------------
+        
         resultDiv.style.display = "block";
-        resultDiv.innerHTML = `<span class="result-label">PROXIED_URL: </span><a href="/m3u8-proxy?url=${encodeURIComponent(
-          url
-        )}" target="_blank">${
-          window.location.href
-        }m3u8-proxy?url=${encodeURIComponent(url)}</a>`;
-
+        resultDiv.innerHTML = `<span class="result-label">PROXIED_URL: </span><a href="${proxiedUrl}" target="_blank">${proxiedUrl}</a>`;
+        
         const video = document.getElementById("player");
         if (hls) {
           hls.destroy();
+          hls = null;
         }
 
-        if (Hls.isSupported()) {
+        if (isM3U8 && Hls.isSupported()) {
+          // HLS.js for M3U8 playlists
           hls = new Hls();
-          hls.loadSource(`/m3u8-proxy?url=${encodeURIComponent(url)}`);
+          hls.loadSource(proxiedUrl);
           hls.attachMedia(video);
           hls.on(Hls.Events.MANIFEST_PARSED, function () {
-            video.play();
+            video.play().catch(e => console.log("HLS Playback failed:", e));
           });
-        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-          video.src = `/m3u8-proxy?url=${encodeURIComponent(url)}`;
-          video.addEventListener("loadedmetadata", function () {
-            video.play();
+        } else {
+          // Direct HTML5 Video for raw streams (like MPEG-TS)
+          // The proxy link will still work in external players like VLC.
+          video.src = proxiedUrl;
+          video.type = "video/mp2t"; // Hint for MPEG-TS
+          video.load();
+          video.play().catch(e => {
+             console.log("Raw Stream Playback failed (expected in many browsers):", e);
+             if (!isM3U8) {
+                // Only alert for raw streams, as they are often unsupported
+                alert("This is a raw stream (MPEG-TS/IP). It may not play in this browser. Copy the PROXIED_URL and open it in VLC Player.");
+             }
           });
         }
       }
@@ -150,6 +172,7 @@
         const video = document.getElementById("player");
         if (hls) {
           hls.destroy();
+          hls = null;
         }
         video.src = "";
       }
