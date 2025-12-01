@@ -1,60 +1,45 @@
+// src/lib/proxyTS.js
 import https from "node:https";
 import http from "node:http";
 
 export async function proxyTs(url, headers, req, res) {
-  let forceHTTPS = false;
-
-  if (url.startsWith("https://")) {
-    forceHTTPS = true;
+  if (!url) {
+    res.writeHead(400);
+    return res.end("Missing URL");
   }
 
-  const uri = new URL(url);
+  const isHTTPS = url.startsWith("https://");
+  const { hostname, port, pathname, search } = new URL(url);
 
   const options = {
-    hostname: uri.hostname,
-    port: uri.port,
-    path: uri.pathname + uri.search,
-    method: req.method,
+    hostname,
+    port: port || (isHTTPS ? 443 : 80),
+    path: pathname + search,
+    method: "GET",
     headers: {
       "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       ...headers,
     },
   };
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "*");
-  res.setHeader("Access-Control-Allow-Methods", "*");
+
+  const client = isHTTPS ? https : http;
 
   try {
-    if (forceHTTPS) {
-      const proxy = https.request(options, (r) => {
-        r.headers["content-type"] = "video/mp2t";
-        res.writeHead(r.statusCode ?? 200, r.headers);
+    const proxy = client.request(options, (up) => {
+      res.setHeader("Content-Type", "video/mp2t");
+      res.writeHead(up.statusCode, up.headers);
+      up.pipe(res);
+    });
 
-        r.pipe(res, {
-          end: true,
-        });
-      });
+    proxy.on("error", (err) => {
+      res.writeHead(500);
+      res.end("TS Proxy Error");
+    });
 
-      req.pipe(proxy, {
-        end: true,
-      });
-    } else {
-      const proxy = http.request(options, (r) => {
-        r.headers["content-type"] = "video/mp2t";
-        res.writeHead(r.statusCode ?? 200, r.headers);
-
-        r.pipe(res, {
-          end: true,
-        });
-      });
-      req.pipe(proxy, {
-        end: true,
-      });
-    }
-  } catch (e) {
+    proxy.end();
+  } catch (err) {
     res.writeHead(500);
-    res.end(e.message);
-    return null;
+    res.end("Proxy Error");
   }
 }
