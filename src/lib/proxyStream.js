@@ -1,4 +1,3 @@
-import proxyStream from "./proxyStream.js";
 import http from "node:http";
 import https from "node:https";
 import { URL } from "node:url";
