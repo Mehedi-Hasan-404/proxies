@@ -125,12 +125,13 @@
             return;
         }
 
-        // --- UPDATED LOGIC: Check for M3U8 or use Raw Stream Proxy ---
+        // --- Routing raw streams to /ts-proxy for HLS conversion/wrapping ---
         const isM3U8 = urlInput.toLowerCase().includes(".m3u8");
-        const proxyPath = isM3U8 ? "/m3u8-proxy" : "/stream-proxy"; 
-        
+        // If it's a raw stream, use /ts-proxy (which is assumed to handle HLS conversion/wrapping)
+        const proxyPath = isM3U8 ? "/m3u8-proxy" : "/ts-proxy"; 
+
         const proxiedUrl = `${window.location.origin}${proxyPath}?url=${encodeURIComponent(urlInput)}`;
-        // ---------------------------------------------------------
+        // ---------------------------------------------------------------------------------
         
         resultDiv.style.display = "block";
         resultDiv.innerHTML = `<span class="result-label">PROXIED_URL: </span><a href="${proxiedUrl}" target="_blank">${proxiedUrl}</a>`;
@@ -141,27 +142,21 @@
           hls = null;
         }
 
-        if (isM3U8 && Hls.isSupported()) {
-          // HLS.js for M3U8 playlists
+        // Always use Hls.js, expecting both m3u8-proxy and ts-proxy to return an M3U8 playlist.
+        if (Hls.isSupported()) {
           hls = new Hls();
           hls.loadSource(proxiedUrl);
           hls.attachMedia(video);
           hls.on(Hls.Events.MANIFEST_PARSED, function () {
             video.play().catch(e => console.log("HLS Playback failed:", e));
           });
-        } else {
-          // Direct HTML5 Video for raw streams (like MPEG-TS)
-          // The proxy link will still work in external players like VLC.
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          // Native HLS playback (Safari, iOS)
           video.src = proxiedUrl;
-          video.type = "video/mp2t"; // Hint for MPEG-TS
           video.load();
-          video.play().catch(e => {
-             console.log("Raw Stream Playback failed (expected in many browsers):", e);
-             if (!isM3U8) {
-                // Only alert for raw streams, as they are often unsupported
-                alert("This is a raw stream (MPEG-TS/IP). It may not play in this browser. Copy the PROXIED_URL and open it in VLC Player.");
-             }
-          });
+          video.play().catch(e => console.log("Native HLS Playback failed:", e));
+        } else {
+             alert("HLS playback is not supported on this browser.");
         }
       }
 
