@@ -8,11 +8,6 @@ import withCORS from "./withCORS.js";
 import parseURL from "./parseURL.js";
 import proxyM3U8 from "./proxyM3U8.js";
 import { proxyTs } from "./proxyTS.js";
-import proxyRequest from "./proxyRequest.js"; // Assuming this exists for the general proxy logic
-
-const cors_headers = {
-  "access-control-allow-origin": "*",
-};
 
 export default function getHandler(options, proxy) {
   const corsAnywhere = {
@@ -28,11 +23,13 @@ export default function getHandler(options, proxy) {
     setHeaders: {},
     corsMaxAge: 0,
   };
+
   Object.keys(corsAnywhere).forEach(function (option) {
     if (Object.prototype.hasOwnProperty.call(options, option)) {
       corsAnywhere[option] = options[option];
     }
   });
+
   if (corsAnywhere.requireHeader) {
     if (typeof corsAnywhere.requireHeader === "string") {
       corsAnywhere.requireHeader = [corsAnywhere.requireHeader.toLowerCase()];
@@ -64,6 +61,7 @@ export default function getHandler(options, proxy) {
       maxRedirects: corsAnywhere.maxRedirects,
       corsMaxAge: corsAnywhere.corsMaxAge,
     };
+
     const cors_headers = withCORS({}, req);
     if (req.method === "OPTIONS") {
       res.writeHead(200, cors_headers);
@@ -91,7 +89,7 @@ export default function getHandler(options, proxy) {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
 
-      res.end(readFileSync(join(process.cwd(), "src", "index.html")));
+      res.end(readFileSync(join(__dirname, "../index.html")));
       return;
     }
 
@@ -107,11 +105,8 @@ export default function getHandler(options, proxy) {
       return;
     }
 
-    // --- CUSTOM ROUTING FOR M3U8/TS PROXY ENDPOINTS ---
     if (!/^\/https?:/.test(req.url) && !isValidHostName(location.hostname)) {
-      const web_server_url = options.web_server_url || 'http://localhost:3000'; 
       const uri = new URL(req.url ?? web_server_url, "http://localhost:3000");
-
       if (uri.pathname === "/m3u8-proxy") {
         let headers = {};
         try {
@@ -123,8 +118,7 @@ export default function getHandler(options, proxy) {
         }
         const url = uri.searchParams.get("url");
         return proxyM3U8(url ?? "", headers, res);
-
-      } else if (uri.pathname === "/ts-proxy") { // <--- THIS HANDLES THE RAW STREAM (routed from index.html)
+      } else if (uri.pathname === "/ts-proxy") {
         let headers = {};
         try {
           headers = JSON.parse(uri.searchParams.get("headers") ?? "{}");
@@ -135,17 +129,14 @@ export default function getHandler(options, proxy) {
         }
         const url = uri.searchParams.get("url");
         return proxyTs(url ?? "", headers, req, res);
-      
       } else if (uri.pathname === "/") {
-        // Correct path for reading index.html
-        return res.end(readFileSync(join(process.cwd(), "src", "index.html")));
+        return res.end(readFileSync(join(__dirname, "../index.html")));
       } else {
         res.writeHead(404, "Invalid host", cors_headers);
         res.end("Invalid host: " + location.hostname);
         return;
       }
     }
-    // --- END CUSTOM ROUTING ---
 
     if (!hasRequiredHeaders(req.headers)) {
       res.writeHead(400, "Header required", cors_headers);
@@ -212,9 +203,11 @@ export default function getHandler(options, proxy) {
       /^\s*https/.test(req.headers["x-forwarded-proto"]);
     const proxyBaseUrl =
       (isRequestedOverHttps ? "https://" : "http://") + req.headers.host;
+
     corsAnywhere.removeHeaders.forEach(function (header) {
       delete req.headers[header];
     });
+
     Object.keys(corsAnywhere.setHeaders).forEach(function (header) {
       req.headers[header] = corsAnywhere.setHeaders[header];
     });
