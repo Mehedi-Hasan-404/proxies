@@ -98,11 +98,7 @@
   <body>
     <div class="test">
       <label for="url" id="labelurl">URL</label>
-      <input 
-        type="text" 
-        id="url" 
-        placeholder="Enter M3U8 (playlist) or Raw Stream (e.g., http://ip:port/)" 
-      />
+      <input type="text" id="url" />
       <button onclick="play()" class="btn btn-play">PLAY</button>
       <button onclick="clearFields()" class="btn btn-clear">CLEAR</button>
     </div>
@@ -115,48 +111,35 @@
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script type="text/javascript">
       let hls;
-      
+
       function play() {
-        const urlInput = document.getElementById("url").value.trim();
+        const url = document.getElementById("url").value;
         const resultDiv = document.getElementById("result");
-        
-        if (!urlInput) {
-            alert("Please enter a URL.");
-            return;
-        }
 
-        // --- Routing raw streams to /ts-proxy for HLS conversion/wrapping ---
-        const isM3U8 = urlInput.toLowerCase().includes(".m3u8");
-        // If it's a raw stream, use /ts-proxy (which is assumed to handle HLS conversion/wrapping)
-        const proxyPath = isM3U8 ? "/m3u8-proxy" : "/ts-proxy"; 
-
-        const proxiedUrl = `${window.location.origin}${proxyPath}?url=${encodeURIComponent(urlInput)}`;
-        // ---------------------------------------------------------------------------------
-        
         resultDiv.style.display = "block";
-        resultDiv.innerHTML = `<span class="result-label">PROXIED_URL: </span><a href="${proxiedUrl}" target="_blank">${proxiedUrl}</a>`;
-        
+        resultDiv.innerHTML = `<span class="result-label">PROXIED_URL: </span><a href="/m3u8-proxy?url=${encodeURIComponent(
+          url
+        )}" target="_blank">${
+          window.location.href
+        }m3u8-proxy?url=${encodeURIComponent(url)}</a>`;
+
         const video = document.getElementById("player");
         if (hls) {
           hls.destroy();
-          hls = null;
         }
 
-        // Always use Hls.js, expecting both m3u8-proxy and ts-proxy to return an M3U8 playlist.
         if (Hls.isSupported()) {
           hls = new Hls();
-          hls.loadSource(proxiedUrl);
+          hls.loadSource(`/m3u8-proxy?url=${encodeURIComponent(url)}`);
           hls.attachMedia(video);
           hls.on(Hls.Events.MANIFEST_PARSED, function () {
-            video.play().catch(e => console.log("HLS Playback failed:", e));
+            video.play();
           });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          // Native HLS playback (Safari, iOS)
-          video.src = proxiedUrl;
-          video.load();
-          video.play().catch(e => console.log("Native HLS Playback failed:", e));
-        } else {
-             alert("HLS playback is not supported on this browser.");
+        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = `/m3u8-proxy?url=${encodeURIComponent(url)}`;
+          video.addEventListener("loadedmetadata", function () {
+            video.play();
+          });
         }
       }
 
@@ -167,7 +150,6 @@
         const video = document.getElementById("player");
         if (hls) {
           hls.destroy();
-          hls = null;
         }
         video.src = "";
       }
